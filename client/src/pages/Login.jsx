@@ -18,7 +18,7 @@ function Login() {
     setLoading(true);
     setError("");
     try {
-      const res = await axios.post("http://localhost:5000/api/login", formData);
+      const res = await axios.post("https://collabboard-production-8eec.up.railway.app/api/login", formData);
       localStorage.setItem("token", res.data.token);
       localStorage.setItem("user", JSON.stringify(res.data.user));
       navigate("/room");

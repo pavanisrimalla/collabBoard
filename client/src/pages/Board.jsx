@@ -23,7 +23,7 @@ const [muted, setMuted] = useState(false);
   const [strokeWidth, setStrokeWidth] = useState(5);
   const [fontSize, setFontSize] = useState(18);
   const [zoomLevel, setZoomLevel] = useState(1);
-  const [chatOpen, setChatOpen] = useState(true);
+  const [chatOpen, setChatOpen] = useState(window.innerWidth >= 768);
   const [messages, setMessages] = useState([
     { username: "System", color: "#6af7c8", message: "Welcome to room!", time: "" }
   ]);
@@ -93,7 +93,7 @@ const [muted, setMuted] = useState(false);
 
   // ── SOCKET INIT ──
   useEffect(() => {
-    socketRef.current = io("http://localhost:5000");
+    socketRef.current = io("https://collabboard-production-8eec.up.railway.app");
     const socket = socketRef.current;
     socket.emit("joinRoom", { roomId, username: user?.username });
 
@@ -163,8 +163,8 @@ socket.on("chatMessage", (msg) => {
       isDrawingMode: false,
       selection: true,
       backgroundColor: "#ffffff",
-      width: window.innerWidth - 60 - 280,
-      height: window.innerHeight - 52,
+      width: window.innerWidth - (window.innerWidth < 768 ? 0 : 60) - (window.innerWidth < 768 ? 0 : 280),
+      height: window.innerHeight - (window.innerWidth < 768 ? 110 : 52),
     });
     fabricRef.current = canvas;
    const canvasWidth = window.innerWidth - 60 - 280;
@@ -186,9 +186,10 @@ const welcome = new fabric.IText("✦ Welcome to CollabBoard\nStart drawing and 
     canvas.renderAll();
 
     const handleResize = () => {
-      canvas.setWidth(window.innerWidth - 60 - 280);
-      canvas.setHeight(window.innerHeight - 52);
-      canvas.renderAll();
+      const isMobile = window.innerWidth < 768;
+canvas.setWidth(window.innerWidth - (isMobile ? 0 : 60) - (isMobile ? 0 : 280));
+canvas.setHeight(window.innerHeight - (isMobile ? 110 : 52));
+        canvas.renderAll();
     };
     window.addEventListener("resize", handleResize);
 
@@ -378,9 +379,9 @@ const sendMessage = () => {
   };
   
 const joinAudio = async () => {
-  const APP_ID = "c4185bae81aa40b6bd35863ef3a6230c";
-  const TOKEN = "007eJxTYGh75vtC42/guztRN94KKD+9ezJOddf6lYfmnpVlnqvretVcgSHZxNDCNCkx1cIwMdHEIMksKcXY1MLMODXNONHMyNggOUhkS2ZDICNDy31pBkYoBPG5GZLzc3ISk5zyE4tSGBgABMUj5A";
-  const CHANNEL = "collabBoard";
+  const APP_ID = "4ae90a86fb164aad8b93ecad9e62dfc8";
+  const TOKEN = null;
+  const CHANNEL = "CollabBoard2";
   try {
     agoraClient.current = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
     await agoraClient.current.join(APP_ID, CHANNEL, TOKEN, null);
@@ -438,7 +439,27 @@ const toggleMute = () => {
 
   return (
     <div style={{height:"100vh",display:"flex",flexDirection:"column",background:"#0f0f13",overflow:"hidden",fontFamily:"sans-serif"}}>
-      <style>{`@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.6;transform:scale(1.3)}}`}</style>
+      <style>{`
+  @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.6;transform:scale(1.3)}}
+  @media (max-width: 768px) {
+    .toolbar { 
+      width: 100% !important; 
+      height: 60px !important;
+      flex-direction: row !important;
+      position: fixed !important;
+      bottom: 0 !important;
+      left: 0 !important;
+      z-index: 1000 !important;
+      overflow-x: auto !important;
+      padding: 0 8px !important;
+      border-right: none !important;
+      border-top: 1px solid #2a2a3a !important;
+    }
+    .toolbar button { width: 36px !important; height: 36px !important; flex-shrink: 0 !important; }
+    .toolbar div { flex-shrink: 0 !important; }
+    .chat-panel { width: 100% !important; position: fixed !important; bottom: 60px !important; left: 0 !important; height: 60% !important; z-index: 999 !important; }
+  }
+`}</style>
 
       <header style={{height:52,background:"#16161e",borderBottom:"1px solid #2a2a3a",display:"flex",alignItems:"center",padding:"0 16px",gap:12,flexShrink:0,zIndex:100}}>
         <div style={{display:"flex",alignItems:"center",gap:8,fontWeight:700,fontSize:15,color:"white"}}>
@@ -459,8 +480,6 @@ const toggleMute = () => {
         </div>
         <button onClick={exportImage} style={{background:"#1e1e2a",border:"1px solid #2a2a3a",color:"#e8e8f0",borderRadius:7,padding:"6px 12px",fontSize:12,cursor:"pointer"}}>⬇ PNG</button>
         <button onClick={exportPDF} style={{background:"#1e1e2a",border:"1px solid #2a2a3a",color:"#e8e8f0",borderRadius:7,padding:"6px 12px",fontSize:12,cursor:"pointer"}}>⬇ PDF</button>
-        <button onClick={exportPDF} style={{background:"#1e1e2a",border:"1px solid #2a2a3a",color:"#e8e8f0",borderRadius:7,padding:"6px 12px",fontSize:12,cursor:"pointer"}}>⬇ PDF</button>
-
 {!inCall ? (
   <button onClick={joinAudio} style={{background:"#6af7c8",border:"none",color:"#000",borderRadius:7,padding:"6px 12px",fontSize:12,cursor:"pointer",fontWeight:600}}>🎙️ Join Voice</button>
 ) : (
@@ -472,13 +491,12 @@ const toggleMute = () => {
   </>
 )}
 
-<button onClick={()=>setChatOpen(p=>!p)} style={{background:"#7c6af7",border:"none",color:"white",borderRadius:7,padding:"6px 12px",fontSize:12,cursor:"pointer"}}>💬 Chat</button>
         <button onClick={()=>setChatOpen(p=>!p)} style={{background:"#7c6af7",border:"none",color:"white",borderRadius:7,padding:"6px 12px",fontSize:12,cursor:"pointer"}}>💬 Chat</button>
         <button onClick={handleLogout} style={{background:"rgba(247,106,138,0.1)",border:"1px solid #f76a8a",color:"#f76a8a",borderRadius:7,padding:"6px 12px",fontSize:12,cursor:"pointer"}}>Logout</button>
       </header>
 
       <div style={{display:"flex",flex:1,overflow:"hidden"}}>
-        <div style={{width:60,background:"#16161e",borderRight:"1px solid #2a2a3a",display:"flex",flexDirection:"column",alignItems:"center",padding:"12px 0",gap:4,zIndex:10}}>
+        <div className="toolbar" style={{width:60,background:"#16161e",borderRight:"1px solid #2a2a3a",display:"flex",flexDirection:"column",alignItems:"center",padding:"12px 0",gap:4,zIndex:10}}>
           {toolList.map(t=>(
             <button key={t.id} title={t.tip} onClick={()=>setTool(t.id)} style={{width:44,height:44,border:"none",borderRadius:10,cursor:"pointer",background:tool===t.id?"#7c6af7":"transparent",color:tool===t.id?"white":"#8888aa",fontSize:18,display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.15s",boxShadow:tool===t.id?"0 0 16px rgba(124,106,247,0.4)":"none"}}>{t.icon}</button>
           ))}
@@ -512,7 +530,7 @@ const toggleMute = () => {
         </div>
 
         {chatOpen&&(
-          <div style={{width:280,background:"#16161e",borderLeft:"1px solid #2a2a3a",display:"flex",flexDirection:"column",zIndex:10}}>
+          <div className="chat-panel" style={{width:280,background:"#16161e",borderLeft:"1px solid #2a2a3a",display:"flex",flexDirection:"column",zIndex:10}}>
             <div style={{padding:"14px 16px",borderBottom:"1px solid #2a2a3a",fontSize:13,fontWeight:600,color:"white",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <span>💬 Room Chat</span>
               <span style={{color:"#6af7c8",fontSize:11}}>● {users.length} online</span>

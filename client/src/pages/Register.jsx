@@ -27,7 +27,7 @@ function Register() {
     }
 
     try {
-      await axios.post("http://localhost:5000/api/register", formData);
+      await axios.post("https://collabboard-production-8eec.up.railway.app/api/register", formData);
       setSuccess("Account created! Redirecting to login...");
       setTimeout(() => navigate("/login"), 1500);
     } catch (err) {
