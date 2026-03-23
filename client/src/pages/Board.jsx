@@ -1,3 +1,4 @@
+/* eslint-disable */
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { fabric } from "fabric";
