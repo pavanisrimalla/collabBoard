@@ -6,9 +6,14 @@ import { io } from "socket.io-client";
 import AgoraRTC from "agora-rtc-sdk-ng";
 
 // Defined outside component so it's available everywhere including useEffects
- const detectMobile = () => {
-  return window.innerWidth < 900;
+const detectMobile = () => {
+  const userAgent = navigator.userAgent || navigator.vendor || window.opera;
+  const isMobileUA = /android|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(userAgent.toLowerCase());
+  const isTouchDevice = navigator.maxTouchPoints > 0;
+  const isSmallScreen = window.innerWidth < 768;
+  return isMobileUA || isTouchDevice || isSmallScreen;
 };
+
 function Board() {
   const { roomId } = useParams();
   const navigate = useNavigate();
@@ -42,11 +47,17 @@ function Board() {
 
   // React to orientation changes and window resize
   // Touch devices (phones/tablets) always stay in mobile mode regardless of orientation
+  const [isTouch] = useState(() => navigator.maxTouchPoints > 0);
+
   useEffect(() => {
-  const handleResize = () => {
-    setIsMobile(detectMobile());
-    if (!detectMobile()) setChatOpen(true);
-  };
+    const handleResize = () => {
+      if (isTouch) {
+        setIsMobile(true);
+      } else {
+        setIsMobile(detectMobile());
+        if (!detectMobile()) setChatOpen(true);
+      }
+    };
     window.addEventListener("resize", handleResize);
     window.addEventListener("orientationchange", handleResize);
     return () => {
@@ -451,8 +462,15 @@ function Board() {
       await agoraClient.current.publish(localAudioTrack.current);
       agoraClient.current.on("user-published", async (user, mediaType) => {
         await agoraClient.current.subscribe(user, mediaType);
-        if (mediaType === "audio") user.audioTrack.play();
+        if (mediaType === "audio") {
+          user.audioTrack.play();
+        }
       });
+      AgoraRTC.setParameter("AUDIO_PROCESSING_CONFIG", {
+  AEC: true,  // Acoustic Echo Cancellation
+  ANS: true,  // Ambient Noise Suppression
+  AGC: true   // Automatic Gain Control
+});
       setInCall(true);
       showToast("🎙️ Voice joined!");
     } catch (err) {
@@ -559,8 +577,7 @@ function Board() {
   const MobileToolbar = () => (
     <div style={{
       position: "fixed", bottom: 0, left: 0, right: 0,
-      height: "calc(72px + env(safe-area-inset-bottom))",
-      paddingBottom: "env(safe-area-inset-bottom)",
+      height: 72,
       background: "#16161e",
       borderTop: "1px solid #2a2a3a",
       zIndex: 1000,
@@ -712,38 +729,41 @@ function Board() {
         .hide-scrollbar::-webkit-scrollbar { display: none; }
       `}</style>
 
-      <header style={{ height: 52, background: "#16161e", borderBottom: "1px solid #2a2a3a", display: "flex", alignItems: "center", padding: "0 10px", gap: 8, flexShrink: 0, zIndex: 100 }}>
-  <div style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: 700, fontSize: 14, color: "white", flexShrink: 0 }}>
-    <div style={{ width: 24, height: 24, background: "linear-gradient(135deg,#7c6af7,#f76a8a)", borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12 }}>✦</div>
-    {!isMobile && "CollabBoard"}
-  </div>
-  <div style={{ background: "#1e1e2a", border: "1px solid #2a2a3a", borderRadius: 6, padding: "3px 8px", fontSize: 11, color: "#8888aa", fontFamily: "monospace", flexShrink: 0 }}>#{roomId}</div>
-  <div style={{ display: "flex", alignItems: "center", gap: 4, marginLeft: "auto", fontSize: 11, color: "#8888aa", flexShrink: 0 }}>
-    <div style={{ width: 6, height: 6, background: "#6af7c8", borderRadius: "50%", animation: "pulse 2s infinite" }}></div>
-    <div style={{ display: "flex" }}>
-      {users.slice(0, isMobile ? 2 : 4).map((u, i) => (
-        <div key={i} title={u.username} style={{ width: 24, height: 24, borderRadius: "50%", background: u.color || "#7c6af7", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 600, border: "2px solid #0f0f13", marginLeft: i === 0 ? 0 : -6, color: "white" }}>
-          {u.username?.[0]?.toUpperCase()}
+      {/* ── HEADER ── */}
+      <header style={{ height: 52, background: "#16161e", borderBottom: "1px solid #2a2a3a", display: "flex", alignItems: "center", padding: "0 16px", gap: 12, flexShrink: 0, zIndex: 100, overflowX: "auto" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 700, fontSize: 15, color: "white", flexShrink: 0 }}>
+          <div style={{ width: 26, height: 26, background: "linear-gradient(135deg,#7c6af7,#f76a8a)", borderRadius: 7, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13 }}>✦</div>
+          CollabBoard
         </div>
-      ))}
-    </div>
-    <span>{users.length}</span>
-  </div>
-  {!isMobile && <>
-    <button onClick={exportImage} style={{ background: "#1e1e2a", border: "1px solid #2a2a3a", color: "#e8e8f0", borderRadius: 7, padding: "6px 12px", fontSize: 12, cursor: "pointer", flexShrink: 0 }}>⬇ PNG</button>
-    <button onClick={exportPDF} style={{ background: "#1e1e2a", border: "1px solid #2a2a3a", color: "#e8e8f0", borderRadius: 7, padding: "6px 12px", fontSize: 12, cursor: "pointer", flexShrink: 0 }}>⬇ PDF</button>
-    {!inCall ? (
-      <button onClick={joinAudio} style={{ background: "#6af7c8", border: "none", color: "#000", borderRadius: 7, padding: "6px 12px", fontSize: 12, cursor: "pointer", fontWeight: 600, flexShrink: 0 }}>🎙️ Join Voice</button>
-    ) : (
-      <>
-        <button onClick={toggleMute} style={{ background: muted ? "#f76a8a" : "#6af7c8", border: "none", color: "#000", borderRadius: 7, padding: "6px 12px", fontSize: 12, cursor: "pointer", fontWeight: 600, flexShrink: 0 }}>{muted ? "🔇 Unmute" : "🎙️ Mute"}</button>
-        <button onClick={leaveAudio} style={{ background: "#f76a8a", border: "none", color: "white", borderRadius: 7, padding: "6px 12px", fontSize: 12, cursor: "pointer", fontWeight: 600, flexShrink: 0 }}>📵 Leave</button>
-      </>
-    )}
-    <button onClick={() => setChatOpen(p => !p)} style={{ background: "#7c6af7", border: "none", color: "white", borderRadius: 7, padding: "6px 12px", fontSize: 12, cursor: "pointer", flexShrink: 0 }}>💬 Chat</button>
-  </>}
-  <button onClick={handleLogout} style={{ background: "rgba(247,106,138,0.1)", border: "1px solid #f76a8a", color: "#f76a8a", borderRadius: 7, padding: isMobile ? "5px 8px" : "6px 12px", fontSize: isMobile ? 11 : 12, cursor: "pointer", flexShrink: 0 }}>Logout</button>
-</header>
+        <div style={{ background: "#1e1e2a", border: "1px solid #2a2a3a", borderRadius: 6, padding: "4px 10px", fontSize: 12, color: "#8888aa", fontFamily: "monospace", flexShrink: 0 }}>room: #{roomId}</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginLeft: "auto", fontSize: 12, color: "#8888aa", flexShrink: 0 }}>
+          <div style={{ width: 7, height: 7, background: "#6af7c8", borderRadius: "50%", animation: "pulse 2s infinite" }}></div>
+          <div style={{ display: "flex" }}>
+            {users.slice(0, 4).map((u, i) => (
+              <div key={i} title={u.username} style={{ width: 28, height: 28, borderRadius: "50%", background: u.color || "#7c6af7", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 600, border: "2px solid #0f0f13", marginLeft: i === 0 ? 0 : -6, color: "white" }}>
+                {u.username?.[0]?.toUpperCase()}
+              </div>
+            ))}
+          </div>
+          <span>{users.length} online</span>
+        </div>
+        {!isMobile && <>
+          <button onClick={exportImage} style={{ background: "#1e1e2a", border: "1px solid #2a2a3a", color: "#e8e8f0", borderRadius: 7, padding: "6px 12px", fontSize: 12, cursor: "pointer", flexShrink: 0 }}>⬇ PNG</button>
+          <button onClick={exportPDF} style={{ background: "#1e1e2a", border: "1px solid #2a2a3a", color: "#e8e8f0", borderRadius: 7, padding: "6px 12px", fontSize: 12, cursor: "pointer", flexShrink: 0 }}>⬇ PDF</button>
+          {!inCall ? (
+            <button onClick={joinAudio} style={{ background: "#6af7c8", border: "none", color: "#000", borderRadius: 7, padding: "6px 12px", fontSize: 12, cursor: "pointer", fontWeight: 600, flexShrink: 0 }}>🎙️ Join Voice</button>
+          ) : (
+            <>
+              <button onClick={toggleMute} style={{ background: muted ? "#f76a8a" : "#6af7c8", border: "none", color: "#000", borderRadius: 7, padding: "6px 12px", fontSize: 12, cursor: "pointer", fontWeight: 600, flexShrink: 0 }}>
+                {muted ? "🔇 Unmute" : "🎙️ Mute"}
+              </button>
+              <button onClick={leaveAudio} style={{ background: "#f76a8a", border: "none", color: "white", borderRadius: 7, padding: "6px 12px", fontSize: 12, cursor: "pointer", fontWeight: 600, flexShrink: 0 }}>📵 Leave</button>
+            </>
+          )}
+          <button onClick={() => setChatOpen(p => !p)} style={{ background: "#7c6af7", border: "none", color: "white", borderRadius: 7, padding: "6px 12px", fontSize: 12, cursor: "pointer", flexShrink: 0 }}>💬 Chat</button>
+        </>}
+        <button onClick={handleLogout} style={{ background: "rgba(247,106,138,0.1)", border: "1px solid #f76a8a", color: "#f76a8a", borderRadius: 7, padding: "6px 12px", fontSize: 12, cursor: "pointer", flexShrink: 0 }}>Logout</button>
+      </header>
 
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
 
