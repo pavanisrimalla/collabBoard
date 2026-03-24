@@ -164,8 +164,10 @@ function Board() {
     });
 
     socket.on("addSticky", ({ id, left, top, colIndex }) => {
-      const col = stickyColors[colIndex];
+      const col = stickyColors[colIndex % stickyColors.length];
+      if (!col) return;
       createStickyDOM(id, left, top, col, "");
+      showToast("📌 " + "A sticky note was added!");
     });
     socket.on("updateSticky", (data) => {
       if (!data) return;
@@ -428,10 +430,11 @@ function Board() {
   const joinAudio = async () => {
     const APP_ID = "4ae90a86fb164aad8b93ecad9e62dfc8";
     const TOKEN = null;
-    const CHANNEL = "CollabBoard2";
+    // Use roomId as channel so each room has its own voice channel
+    // and users from different rooms don't hear each other
+    const CHANNEL = "room_" + roomId;
     try {
       // Step 1: explicitly request mic permission first
-      // This is required on mobile browsers before Agora can access it
       const permissionResult = await navigator.permissions.query({ name: "microphone" });
       if (permissionResult.state === "denied") {
         showToast("🎙️ Mic blocked! Please allow microphone in your browser settings and try again.");
@@ -439,10 +442,8 @@ function Board() {
       }
 
       // Step 2: trigger the browser mic permission prompt via getUserMedia
-      // This must happen before Agora tries to access the mic
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        // Stop the stream immediately — we just needed the permission grant
         stream.getTracks().forEach(track => track.stop());
       } catch (permErr) {
         if (permErr.name === "NotAllowedError" || permErr.name === "PermissionDeniedError") {
@@ -455,22 +456,30 @@ function Board() {
         return;
       }
 
-      // Step 3: now join Agora with permission already granted
+      // Step 3: leave any existing session first to prevent echo on rejoin
+      if (agoraClient.current) {
+        try {
+          localAudioTrack.current?.stop();
+          localAudioTrack.current?.close();
+          await agoraClient.current.leave();
+        } catch (e) {}
+        agoraClient.current = null;
+        localAudioTrack.current = null;
+      }
+
+      // Step 4: now join Agora with permission already granted
       agoraClient.current = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
       await agoraClient.current.join(APP_ID, CHANNEL, TOKEN, null);
       localAudioTrack.current = await AgoraRTC.createMicrophoneAudioTrack();
       await agoraClient.current.publish(localAudioTrack.current);
-      agoraClient.current.on("user-published", async (user, mediaType) => {
-        await agoraClient.current.subscribe(user, mediaType);
-        if (mediaType === "audio") {
-          user.audioTrack.play();
-        }
+      agoraClient.current.on("user-published", async (remoteUser, mediaType) => {
+        await agoraClient.current.subscribe(remoteUser, mediaType);
+        if (mediaType === "audio") remoteUser.audioTrack.play();
       });
-      AgoraRTC.setParameter("AUDIO_PROCESSING_CONFIG", {
-  AEC: true,  // Acoustic Echo Cancellation
-  ANS: true,  // Ambient Noise Suppression
-  AGC: true   // Automatic Gain Control
-});
+      // Handle user leaving — stop their audio track
+      agoraClient.current.on("user-unpublished", async (remoteUser, mediaType) => {
+        if (mediaType === "audio") remoteUser.audioTrack?.stop();
+      });
       setInCall(true);
       showToast("🎙️ Voice joined!");
     } catch (err) {
@@ -479,9 +488,13 @@ function Board() {
   };
 
   const leaveAudio = async () => {
-    localAudioTrack.current?.stop();
-    localAudioTrack.current?.close();
-    await agoraClient.current?.leave();
+    try {
+      localAudioTrack.current?.stop();
+      localAudioTrack.current?.close();
+      localAudioTrack.current = null;
+      await agoraClient.current?.leave();
+      agoraClient.current = null;
+    } catch (e) {}
     setInCall(false);
     setMuted(false);
     showToast("🔇 Left voice call");
